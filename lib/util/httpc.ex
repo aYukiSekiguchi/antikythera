@@ -60,8 +60,9 @@ defmodule Antikythera.Httpc do
   require AntikytheraCore.Logger, as: L
 
   alias Croma.Result, as: R
-  alias Antikythera.{MapUtil, Url}
+  alias Antikythera.{GearName, MapUtil, Time, Url}
   alias Antikythera.Http.{Status, Method, Headers, SetCookie, SetCookiesMap}
+  alias AntikytheraCore.GearModule
 
   defmodule ReqBody do
     @moduledoc """
@@ -165,6 +166,64 @@ defmodule Antikythera.Httpc do
     request(method, url, body, headers, options) |> R.get!()
   end
 
+  defun request_with_logging(
+          gear_name :: v[GearName.t()],
+          method :: v[Method.t()],
+          url :: v[Url.t()],
+          body :: v[ReqBody.t()],
+          headers :: v[Headers.t()] \\ %{},
+          options :: Keyword.t() \\ []
+        ) :: R.t(Response.t()) do
+    start_monotonic = System.monotonic_time(:millisecond)
+    start_time = Time.now()
+
+    response =
+      request(
+        method,
+        url,
+        body,
+        headers,
+        options
+      )
+
+    end_time = Time.now()
+    used_time = System.monotonic_time(:millisecond) - start_monotonic
+
+    invoke_gear_logger(
+      gear_name,
+      method,
+      url,
+      body,
+      headers,
+      options,
+      response,
+      start_time,
+      end_time,
+      used_time
+    )
+
+    response
+  end
+
+  defun request_with_logging!(
+          gear_name :: v[GearName.t()],
+          method :: v[Method.t()],
+          url :: v[Url.t()],
+          body :: v[ReqBody.t()],
+          headers :: v[Headers.t()] \\ %{},
+          options :: Keyword.t() \\ []
+        ) :: Response.t() do
+    request_with_logging(
+      gear_name,
+      method,
+      url,
+      body,
+      headers,
+      options
+    )
+    |> R.get!()
+  end
+
   Enum.each([:get, :delete, :options, :head], fn method ->
     defun unquote(method)(
             url :: Url.t(),
@@ -175,12 +234,32 @@ defmodule Antikythera.Httpc do
     end
 
     # credo:disable-for-next-line Credo.Check.Warning.UnsafeToAtom
+    defun unquote(:"#{method}_with_logging")(
+            gear_name :: v[GearName.t()],
+            url :: Url.t(),
+            headers :: Headers.t() \\ %{},
+            options :: Keyword.t() \\ []
+          ) :: R.t(Response.t()) do
+      request_with_logging(gear_name, unquote(method), url, "", headers, options)
+    end
+
+    # credo:disable-for-next-line Credo.Check.Warning.UnsafeToAtom
     defun unquote(:"#{method}!")(
             url :: Url.t(),
             headers :: Headers.t() \\ %{},
             options :: Keyword.t() \\ []
           ) :: Response.t() do
       request!(unquote(method), url, "", headers, options)
+    end
+
+    # credo:disable-for-next-line Credo.Check.Warning.UnsafeToAtom
+    defun unquote(:"#{method}_with_logging!")(
+            gear_name :: v[GearName.t()],
+            url :: Url.t(),
+            headers :: Headers.t() \\ %{},
+            options :: Keyword.t() \\ []
+          ) :: Response.t() do
+      request_with_logging!(gear_name, unquote(method), url, "", headers, options)
     end
   end)
 
@@ -195,6 +274,17 @@ defmodule Antikythera.Httpc do
     end
 
     # credo:disable-for-next-line Credo.Check.Warning.UnsafeToAtom
+    defun unquote(:"#{method}_with_logging")(
+            gear_name :: v[GearName.t()],
+            url :: Url.t(),
+            body :: ReqBody.t(),
+            headers :: Headers.t(),
+            options :: Keyword.t() \\ []
+          ) :: R.t(Response.t()) do
+      request_with_logging(gear_name, unquote(method), url, body, headers, options)
+    end
+
+    # credo:disable-for-next-line Credo.Check.Warning.UnsafeToAtom
     defun unquote(:"#{method}!")(
             url :: Url.t(),
             body :: ReqBody.t(),
@@ -202,6 +292,17 @@ defmodule Antikythera.Httpc do
             options :: Keyword.t() \\ []
           ) :: Response.t() do
       request!(unquote(method), url, body, headers, options)
+    end
+
+    # credo:disable-for-next-line Credo.Check.Warning.UnsafeToAtom
+    defun unquote(:"#{method}_with_logging!")(
+            gear_name :: v[GearName.t()],
+            url :: Url.t(),
+            body :: ReqBody.t(),
+            headers :: Headers.t(),
+            options :: Keyword.t() \\ []
+          ) :: Response.t() do
+      request_with_logging!(gear_name, unquote(method), url, body, headers, options)
     end
   end)
 
@@ -405,6 +506,32 @@ defmodule Antikythera.Httpc do
         true -> encode_path_impl(rest, <<acc::binary, c>>)
         false -> encode_path_impl(rest, <<acc::binary, ?%, hex(bsr(c, 4)), hex(band(c, 15))>>)
       end
+  end
+
+  defunp invoke_gear_logger(
+           gear_name :: v[GearName.t()],
+           method :: v[Method.t()],
+           url :: v[Url.t()],
+           body :: v[ReqBody.t()],
+           headers :: v[Headers.t()],
+           options :: Keyword.t(),
+           response :: v[R.t(Response.t())],
+           start_time :: v[Antikythera.Time.t()],
+           end_time :: v[Antikythera.Time.t()],
+           used_time :: v[non_neg_integer]
+         ) :: :ok do
+    mod = GearModule.httpc_logger(gear_name)
+
+    if mod != nil do
+      try do
+        mod.log(method, url, body, headers, options, response, start_time, end_time, used_time)
+      rescue
+        _ ->
+          :ok
+      end
+    end
+
+    :ok
   end
 end
 
