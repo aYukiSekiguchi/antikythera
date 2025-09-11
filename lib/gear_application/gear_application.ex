@@ -86,7 +86,6 @@ defmodule Antikythera.GearApplication do
 
       use Antikythera.GearApplication.ConfigGetter
       use Antikythera.GearApplication.ErrorHandler
-      use Antikythera.GearApplication.HttpcLogger
       use Antikythera.GearApplication.Logger
       use Antikythera.GearApplication.G2g
       use Antikythera.GearApplication.MetricsUploader

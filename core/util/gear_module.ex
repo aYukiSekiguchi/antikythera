@@ -20,16 +20,6 @@ defmodule AntikytheraCore.GearModule do
     camelize_gear_name(gear_name) |> Module.concat("Controller.Error")
   end
 
-  defun httpc_logger(gear_name :: v[GearName.t()]) :: nil | module do
-    gear_app_module = camelize_gear_name(gear_name) |> List.wrap() |> Module.safe_concat()
-    gear_app_module.httpc_logger_module()
-  end
-
-  defun httpc_logger_unsafe(gear_name :: v[GearName.t()]) :: module do
-    # credo:disable-for-next-line Credo.Check.Warning.UnsafeToAtom
-    camelize_gear_name(gear_name) |> Module.concat("HttpcLogger")
-  end
-
   [
     :logger,
     :router,
