@@ -173,7 +173,7 @@ defmodule Antikythera.GearApplication.HttpcWithLogging do
         # Check if the calling module defines a log/9 function at runtime
         if function_exported?(__MODULE__, :log, 9) do
           try do
-            __MODULE__.log(method, url, body, headers, options, response, start_time, end_time, used_time)
+            apply(__MODULE__, :log, [method, url, body, headers, options, response, start_time, end_time, used_time])
           rescue
             _ ->
               :ok
