@@ -2,8 +2,8 @@ defmodule <%= gear_name_camel %>.Controller.HttpExample do
   use Antikythera.Controller
 
   def external_api(conn) do
-    # Example using the gear's HttpcWithLogging module
-    case <%= gear_name_camel %>.HttpcWithLogging.get("https://jsonplaceholder.typicode.com/posts/1") do
+    # Example using the gear's Httpc module with logging
+    case <%= gear_name_camel %>.Httpc.get("https://jsonplaceholder.typicode.com/posts/1") do
       {:ok, response} ->
         case Jason.decode(response.body) do
           {:ok, data} ->
@@ -25,7 +25,7 @@ defmodule <%= gear_name_camel %>.Controller.HttpExample do
       userId: 1
     }
 
-    case <%= gear_name_camel %>.HttpcWithLogging.post(
+    case <%= gear_name_camel %>.Httpc.post(
       "https://jsonplaceholder.typicode.com/posts",
       {:json, post_data},
       %{"content-type" => "application/json"}

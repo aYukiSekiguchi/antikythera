@@ -7,28 +7,24 @@ defmodule Antikythera.GearApplication.HttpcWithLogging do
   Helper module to create HTTP client wrapper with logging functionality.
 
   This module provides a wrapper around `Antikythera.Httpc` that automatically includes
-  logging capabilities for HTTP requests. When a gear application `use`s this module,
-  it generates HTTP client functions that automatically log HTTP requests using the
-  gear's configured logging mechanism.
+  logging capabilities for HTTP requests. When a gear application creates a dedicated
+  HTTP client module that `use`s this module, it generates HTTP client functions that
+  automatically log HTTP requests using the gear's configured logging mechanism.
 
   ## Usage
 
-  In your gear application module:
+  Create a dedicated HTTP client module in your gear application:
 
-      defmodule MyGear do
-        use Antikythera.GearApplication
+      defmodule MyGear.Httpc do
         use Antikythera.GearApplication.HttpcWithLogging
-
-        # ... other gear code
       end
 
-  This will generate a module called `MyGear.HttpcWithLogging` with HTTP client
-  functions that automatically log requests.
+  This will add HTTP client functions with automatic logging directly to `MyGear.Httpc`.
 
   ## Generated Functions
 
-  The generated module provides the same interface as `Antikythera.Httpc` but with
-  automatic logging:
+  The module that uses `HttpcWithLogging` will have the same interface as
+  `Antikythera.Httpc` but with automatic logging:
 
   - `request/5` - Make HTTP request with logging
   - `request!/5` - Make HTTP request with logging, raising on error
@@ -38,20 +34,22 @@ defmodule Antikythera.GearApplication.HttpcWithLogging do
   ## Example
 
       # In your gear controller:
-      response = MyGear.HttpcWithLogging.get("https://api.example.com/data")
+      response = MyGear.Httpc.get("https://api.example.com/data")
 
   This will automatically log the HTTP request using your gear's logging configuration,
-  and invoke any custom logging callback defined in your gear's `HttpcLogger` module
+  and invoke any custom logging callback defined directly in your HTTP client module
   (if present).
 
   ## Custom Logging Callback
 
-  To customize HTTP request logging, implement an `HttpcLogger` module in your gear:
+  To customize HTTP request logging, implement a `log/9` function directly in your HTTP client module:
 
-      defmodule MyGear.HttpcLogger do
+      defmodule MyGear.Httpc do
+        use Antikythera.GearApplication.HttpcWithLogging
+
         def log(method, url, body, headers, options, response, start_time, end_time, used_time) do
           # Custom logging logic here
-          # This will be called for each HTTP request made via HttpcWithLogging
+          # This will be called for each HTTP request made via this HTTP client
         end
       end
 
@@ -116,93 +114,80 @@ defmodule Antikythera.GearApplication.HttpcWithLogging do
     end
 
     quote do
-      defmodule HttpcWithLogging do
-        @moduledoc """
-        HTTP client with automatic logging for #{__MODULE__ |> Module.split() |> hd()} gear.
+      alias Antikythera.{Http, Httpc}
+      alias Httpc.{ReqBody, Response}
+      alias Croma.Result, as: R
 
-        This module provides HTTP client functions that automatically log requests
-        using the gear's logging configuration and any custom HttpcLogger callback.
-        """
+      defun request(
+              method :: v[Http.Method.t()],
+              url :: v[Antikythera.Url.t()],
+              body :: v[ReqBody.t()],
+              headers :: v[Http.Headers.t()] \\ %{},
+              options :: Keyword.t() \\ []
+            ) :: R.t(Response.t()) do
+        start_monotonic = System.monotonic_time(:millisecond)
+        start_time = Antikythera.Time.now()
 
-        alias Antikythera.{Http, Httpc}
-        alias Httpc.{ReqBody, Response}
-        alias Croma.Result, as: R
+        response = Httpc.request(method, url, body, headers, options)
 
-        @gear_module unquote(__CALLER__.module)
+        end_time = Antikythera.Time.now()
+        used_time = System.monotonic_time(:millisecond) - start_monotonic
 
-        defun request(
-                method :: v[Http.Method.t()],
-                url :: v[Antikythera.Url.t()],
-                body :: v[ReqBody.t()],
-                headers :: v[Http.Headers.t()] \\ %{},
-                options :: Keyword.t() \\ []
-              ) :: R.t(Response.t()) do
-          start_monotonic = System.monotonic_time(:millisecond)
-          start_time = Antikythera.Time.now()
+        invoke_gear_logger(
+          method,
+          url,
+          body,
+          headers,
+          options,
+          response,
+          start_time,
+          end_time,
+          used_time
+        )
 
-          response = Httpc.request(method, url, body, headers, options)
-
-          end_time = Antikythera.Time.now()
-          used_time = System.monotonic_time(:millisecond) - start_monotonic
-
-          invoke_gear_logger(
-            method,
-            url,
-            body,
-            headers,
-            options,
-            response,
-            start_time,
-            end_time,
-            used_time
-          )
-
-          response
-        end
-
-        defun request!(
-                method :: v[Http.Method.t()],
-                url :: v[Antikythera.Url.t()],
-                body :: v[ReqBody.t()],
-                headers :: v[Http.Headers.t()] \\ %{},
-                options :: Keyword.t() \\ []
-              ) :: Response.t() do
-          request(method, url, body, headers, options) |> R.get!()
-        end
-
-        # Private helper function to invoke gear logger
-        defp invoke_gear_logger(
-               method,
-               url,
-               body,
-               headers,
-               options,
-               response,
-               start_time,
-               end_time,
-               used_time
-             ) do
-          # Check if the gear defines an HttpcLogger module with log/9 function
-          httpc_logger_module = Module.concat(@gear_module, HttpcLogger)
-
-          if function_exported?(httpc_logger_module, :log, 9) do
-            try do
-              httpc_logger_module.log(method, url, body, headers, options, response, start_time, end_time, used_time)
-            rescue
-              _ ->
-                :ok
-            end
-          end
-
-          :ok
-        end
-
-        # Insert generated GET, DELETE, OPTIONS, HEAD methods
-        unquote_splicing(get_methods)
-
-        # Insert generated POST, PUT, PATCH methods
-        unquote_splicing(body_methods)
+        response
       end
+
+      defun request!(
+              method :: v[Http.Method.t()],
+              url :: v[Antikythera.Url.t()],
+              body :: v[ReqBody.t()],
+              headers :: v[Http.Headers.t()] \\ %{},
+              options :: Keyword.t() \\ []
+            ) :: Response.t() do
+        request(method, url, body, headers, options) |> R.get!()
+      end
+
+      # Private helper function to invoke gear logger
+      defp invoke_gear_logger(
+             method,
+             url,
+             body,
+             headers,
+             options,
+             response,
+             start_time,
+             end_time,
+             used_time
+           ) do
+        # Check if the calling module defines a log/9 function at runtime
+        if function_exported?(__MODULE__, :log, 9) do
+          try do
+            __MODULE__.log(method, url, body, headers, options, response, start_time, end_time, used_time)
+          rescue
+            _ ->
+              :ok
+          end
+        end
+
+        :ok
+      end
+
+      # Insert generated GET, DELETE, OPTIONS, HEAD methods
+      unquote_splicing(get_methods)
+
+      # Insert generated POST, PUT, PATCH methods
+      unquote_splicing(body_methods)
     end
   end
 end

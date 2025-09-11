@@ -30,11 +30,8 @@ alias Antikythera.Httpc
 For better observability, you can use `HttpcWithLogging` which automatically logs all HTTP requests:
 
 ```elixir
-defmodule MyGear do
-  use Antikythera.GearApplication
+defmodule MyGear.Httpc do
   use Antikythera.GearApplication.HttpcWithLogging
-  
-  # ... other gear code
 end
 ```
 
@@ -46,7 +43,7 @@ defmodule MyGear.Controller.Api do
 
   def fetch_data(conn) do
     # This will automatically log the HTTP request
-    case MyGear.HttpcWithLogging.get("https://api.example.com/data") do
+    case MyGear.Httpc.get("https://api.example.com/data") do
       {:ok, response} ->
         Conn.json(conn, 200, response.body)
       {:error, reason} ->
@@ -58,7 +55,7 @@ end
 
 ## Available Methods
 
-Both `Httpc` and `HttpcWithLogging` provide the following HTTP methods:
+Both `Httpc` and your gear's `Httpc` module (when using `HttpcWithLogging`) provide the following HTTP methods:
 
 ### Methods without request body
 - `get/3`, `get!/3`
@@ -141,10 +138,12 @@ The response is an `Antikythera.Httpc.Response` struct containing:
 
 ## Custom Logging
 
-When using `HttpcWithLogging`, you can implement custom logging by creating an `HttpcLogger` module in your gear:
+When using `HttpcWithLogging`, you can implement custom logging by defining a `log/9` function directly in your HTTP client module:
 
 ```elixir
-defmodule MyGear.HttpcLogger do
+defmodule MyGear.Httpc do
+  use Antikythera.GearApplication.HttpcWithLogging
+
   def log(method, url, body, headers, options, response, start_time, end_time, used_time) do
     # Custom logging logic
     MyGear.Logger.info("HTTP #{method |> Atom.to_string() |> String.upcase()} #{url} - #{used_time}ms")
@@ -189,7 +188,7 @@ Common error reasons include:
 - `:response_too_large` - Response body exceeds max_body limit
 
 ```elixir
-case MyGear.HttpcWithLogging.get(url) do
+case MyGear.Httpc.get(url) do
   {:ok, response} ->
     # Success case
     handle_success(response)
