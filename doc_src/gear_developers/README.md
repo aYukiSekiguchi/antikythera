@@ -14,6 +14,8 @@
 
 ## [Implementing controller action](https://hexdocs.pm/antikythera/controller.html)
 
+## [HTTP Client](https://hexdocs.pm/antikythera/http_client.html)
+
 ## [Dynamic HTML generation using templates](https://hexdocs.pm/antikythera/dynamic_html.html)
 
 ## [Implementing websocket server](https://hexdocs.pm/antikythera/websocket.html)

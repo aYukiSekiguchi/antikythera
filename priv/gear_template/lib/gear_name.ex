@@ -1,5 +1,6 @@
 defmodule <%= gear_name_camel %> do
   use Antikythera.GearApplication
+  use Antikythera.GearApplication.HttpcWithLogging
   alias Antikythera.{ExecutorPool, Conn}
 
   @type child_spec :: :supervisor.child_spec | {module, term} | module
