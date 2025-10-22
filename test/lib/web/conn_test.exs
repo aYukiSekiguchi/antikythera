@@ -213,4 +213,36 @@ defmodule Antikythera.ConnTest do
     assert conn6.status == 301
     assert conn6.resp_headers == %{"location" => redirect_path}
   end
+
+  test "send_chunked/3 should set chunked state in conn" do
+    conn1 = ConnHelper.make_conn()
+    headers = %{"content-type" => "text/plain"}
+    conn2 = Conn.send_chunked(conn1, 200, headers)
+
+    assert conn2.status == 200
+    assert conn2.resp_headers == headers
+    assert conn2.chunked == %{enabled: true, chunks: []}
+  end
+
+  test "chunk/2 should append chunk to chunks list" do
+    conn1 = ConnHelper.make_conn()
+    conn2 = Conn.send_chunked(conn1, 200, %{"content-type" => "text/plain"})
+    conn3 = Conn.chunk(conn2, "First chunk\n")
+    conn4 = Conn.chunk(conn3, "Second chunk\n")
+
+    assert conn4.chunked.chunks == ["First chunk\n", "Second chunk\n"]
+  end
+
+  test "send_chunked/3 and chunk/2 integration" do
+    conn =
+      ConnHelper.make_conn()
+      |> Conn.send_chunked(200, %{"content-type" => "text/plain"})
+      |> Conn.chunk("chunk1")
+      |> Conn.chunk("chunk2")
+      |> Conn.chunk("chunk3")
+
+    assert conn.status == 200
+    assert conn.chunked.enabled == true
+    assert conn.chunked.chunks == ["chunk1", "chunk2", "chunk3"]
+  end
 end

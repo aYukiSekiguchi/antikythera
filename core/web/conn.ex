@@ -86,23 +86,48 @@ defmodule AntikytheraCore.Conn do
       resp_cookies: %{},
       resp_body: "",
       before_send: [],
-      assigns: %{}
+      assigns: %{},
+      chunked: %{}
     }
   end
 
   def reply_as_cowboy_res(
-        %Conn{status: status, resp_headers: headers, resp_cookies: resp_cookies, resp_body: body} =
-          conn,
+        %Conn{
+          status: status,
+          resp_headers: headers,
+          resp_cookies: resp_cookies,
+          resp_body: body,
+          chunked: chunked
+        } = conn,
         req
       ) do
     try do
       headers_with_defaults = add_default_resp_headers(headers)
       req2 = CoreCookies.merge_cookies_to_cowboy_req(resp_cookies, req)
 
-      if body == nil or body == "" do
-        :cowboy_req.reply(status, headers_with_defaults, req2)
-      else
-        :cowboy_req.reply(status, headers_with_defaults, body, req2)
+      # Check if this is a chunked response
+      case Map.get(chunked, :enabled) do
+        true ->
+          # Initiate chunked response
+          req3 = :cowboy_req.stream_reply(status, headers_with_defaults, req2)
+
+          # Send all accumulated chunks
+          chunks = Map.get(chunked, :chunks, [])
+
+          Enum.each(chunks, fn chunk_body ->
+            :cowboy_req.stream_body(chunk_body, :nofin, req3)
+          end)
+
+          # Send final chunk to close the stream
+          :cowboy_req.stream_body("", :fin, req3)
+
+        _ ->
+          # Normal response
+          if body == nil or body == "" do
+            :cowboy_req.reply(status, headers_with_defaults, req2)
+          else
+            :cowboy_req.reply(status, headers_with_defaults, body, req2)
+          end
       end
     rescue
       e ->
