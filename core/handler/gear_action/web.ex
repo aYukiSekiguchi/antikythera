@@ -32,40 +32,44 @@ defmodule AntikytheraCore.Handler.GearAction.Web do
 
   @impl true
   defun init(req1 :: :cowboy_req.req(), gear_name :: v[GearName.t()]) :: http_reply | ws_upgrade do
-    R.m do
-      method <- CowboyReq.method(req1)
-      path_info = CowboyReq.path_info(req1)
-      helper_modules = GearModule.request_helper_modules(gear_name)
+    try do
+      R.m do
+        method <- CowboyReq.method(req1)
+        path_info = CowboyReq.path_info(req1)
+        helper_modules = GearModule.request_helper_modules(gear_name)
 
-      {entry_point, path_matches, ws?, http_streaming?, timeout} <-
-        find_route(req1, gear_name, method, path_info, helper_modules)
+        {entry_point, path_matches, ws?, http_streaming?, timeout} <-
+          find_route(req1, gear_name, method, path_info, helper_modules) |> IO.inspect()
 
-      routing_info = {gear_name, entry_point, method, path_info, path_matches}
-      qparams <- CowboyReq.query_params(req1, routing_info)
+        routing_info = {gear_name, entry_point, method, path_info, path_matches}
+        qparams <- CowboyReq.query_params(req1, routing_info)
 
-      {req2, body_pair} <-
-        CowboyReq.request_body_pair(req1, routing_info, qparams, helper_modules)
+        {req2, body_pair} <-
+          CowboyReq.request_body_pair(req1, routing_info, qparams, helper_modules)
 
-      pure(
-        run_action_with_conn(
-          req2,
-          routing_info,
-          qparams,
-          body_pair,
-          helper_modules,
-          ws?,
-          http_streaming?,
-          timeout
+        pure(
+          run_action_with_conn(
+            req2,
+            routing_info,
+            qparams,
+            body_pair,
+            helper_modules,
+            ws?,
+            http_streaming?,
+            timeout
+          )
         )
-      )
-    end
-    |> case do
-      # protocol upgrade to websocket
-      {:ok, {req3, state}} -> {:cowboy_websocket, req3, state, @ws_upgrade_options}
-      # normal response
-      {:ok, req_reply} -> {:ok, req_reply, nil}
-      # error response
-      {:error, req_reply} -> {:ok, req_reply, nil}
+      end
+      |> case do
+        # protocol upgrade to websocket
+        {:ok, {req3, state}} -> {:cowboy_websocket, req3, state, @ws_upgrade_options}
+        # normal response
+        {:ok, req_reply} -> {:ok, req_reply, nil}
+        # error response
+        {:error, req_reply} -> {:ok, req_reply, nil}
+      end
+    rescue
+      e -> IO.inspect({:error, e, __STACKTRACE__})
     end
   end
 
