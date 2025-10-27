@@ -67,11 +67,12 @@ defmodule AntikytheraCore.HttpLogger do
   end
 
   defp format_message(value, label, pretty) do
-    formatted_value = if pretty do
-      Kernel.inspect(value, pretty: true, limit: :infinity)
-    else
-      Kernel.inspect(value)
-    end
+    formatted_value =
+      if pretty do
+        Kernel.inspect(value, pretty: true, limit: :infinity)
+      else
+        Kernel.inspect(value)
+      end
 
     log_data = %{
       level: "debug",
@@ -90,13 +91,13 @@ defmodule AntikytheraCore.HttpLogger do
     json_body = Jason.encode!(data)
 
     headers = [
-      {'Content-Type', 'application/json'}
+      {~c"Content-Type", ~c"application/json"}
     ]
 
     request = {
       to_charlist(endpoint),
       headers,
-      'application/json',
+      ~c"application/json",
       json_body
     }
 

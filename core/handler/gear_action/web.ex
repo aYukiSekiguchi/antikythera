@@ -34,12 +34,13 @@ defmodule AntikytheraCore.Handler.GearAction.Web do
   defun init(req1 :: :cowboy_req.req(), gear_name :: v[GearName.t()]) :: http_reply | ws_upgrade do
     try do
       R.m do
-        method <- CowboyReq.method(req1) |> AntikytheraCore.HttpLogger.inspect
+        method <- CowboyReq.method(req1) |> AntikytheraCore.HttpLogger.inspect()
         path_info = CowboyReq.path_info(req1)
         helper_modules = GearModule.request_helper_modules(gear_name)
 
         {entry_point, path_matches, ws?, http_streaming?, timeout} <-
-          find_route(req1, gear_name, method, path_info, helper_modules) |> AntikytheraCore.HttpLogger.inspect()
+          find_route(req1, gear_name, method, path_info, helper_modules)
+          |> AntikytheraCore.HttpLogger.inspect()
 
         routing_info = {gear_name, entry_point, method, path_info, path_matches}
         qparams <- CowboyReq.query_params(req1, routing_info)
